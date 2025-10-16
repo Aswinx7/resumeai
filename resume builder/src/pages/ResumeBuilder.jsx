@@ -13,7 +13,8 @@ import {
   LuItalic,
   LuUnderline,
   LuList,
-  LuLink
+  LuLink,
+  LuPencil
 } from 'react-icons/lu'
 import { LuMail, LuPhone, LuMapPin, LuLinkedin, LuGithub, LuGlobe } from 'react-icons/lu'
 import { DndContext, closestCenter } from '@dnd-kit/core'
@@ -30,6 +31,9 @@ const emptyResume = {
   projects: [{ name: '', link: '', start: '', end: '', details: '' }],
   certifications: [{ name: '', org: '', year: '' }],
   awards: [{ name: '', issuer: '', year: '' }],
+  certificationsTitle: 'Certifications',
+  awardsTitle: 'Awards',
+  achievementsTitle: 'Achievements',
   achievements: '',
   hobbies: ''
 }
@@ -405,6 +409,7 @@ export default function ResumeBuilder() {
   const [tab, setTab] = useState('personal')
   const [theme, setTheme] = useState({ font: 'sans', accent: '#2563eb' })
   const [scale, setScale] = useState(1)
+  const [editingTitle, setEditingTitle] = useState({ certifications: false, awards: false, achievements: false })
   const previewAreaRef = useRef(null)
   const [sectionsOrder, setSectionsOrder] = useState([
     'summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements', 'hobbies'
@@ -472,29 +477,36 @@ export default function ResumeBuilder() {
 
 
   return (
-    <div className="grid grid-cols-12 gap-6">
+    <div className="global-zoom">
+      <div className="grid grid-cols-12 gap-6">
       {/* Sidebar */}
-      <aside className="col-span-12 md:col-span-3 lg:col-span-2">
+      <aside className="col-span-12 md:col-span-4 lg:col-span-3">
         <div className="bg-white rounded-2xl shadow p-2 sticky top-4">
           {tabs.map(t => {
             const Icon = t.icon
             const active = tab === t.id
             const hideable = ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements', 'hobbies'].includes(t.id)
             return (
-              <div key={t.id} className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-sm mb-1 ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}>
-                <button onClick={() => setTab(t.id)} className="flex items-center gap-3">
+              <div
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`w-full flex items-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+              >
+                <div className="flex items-center gap-3">
                   {Icon ? <Icon className="shrink-0" /> : <span className="inline-block w-4 h-4 rounded bg-gray-300" />}
-                  <span>{t.label}</span>
-                </button>
-                {hideable && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setVisible(v => ({ ...v, [t.id]: !v[t.id] })) }}
-                    className={`ml-auto ${visible[t.id] ? 'text-gray-500 hover:text-gray-800' : 'text-red-500 hover:text-red-700'}`}
-                    title={visible[t.id] ? 'Hide this section in preview' : 'Unhide this section in preview'}
-                  >
-                    {visible[t.id] ? <LuEye /> : <LuEyeOff />}
-                  </button>
-                )}
+                  <span className="whitespace-nowrap">{t.label}</span>
+                </div>
+                <div className="ml-auto w-6 shrink-0 flex items-center justify-center">
+                  {hideable && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setVisible(v => ({ ...v, [t.id]: !v[t.id] })) }}
+                      className={`${visible[t.id] ? 'text-gray-500 hover:text-gray-800' : 'text-red-500 hover:text-red-700'}`}
+                      title={visible[t.id] ? 'Hide this section in preview' : 'Unhide this section in preview'}
+                    >
+                      {visible[t.id] ? <LuEye /> : <LuEyeOff />}
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -645,7 +657,21 @@ export default function ResumeBuilder() {
                 Certifications is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, certifications: true }))}>Unhide</button>
               </div>
             )}
-            <SectionHeader title="Certifications" />
+            <div className="flex items-center justify-between">
+              {!editingTitle.certifications ? (
+                <h3 className="font-semibold text-gray-800">{resume.certificationsTitle}</h3>
+              ) : (
+                <input className="border rounded-xl px-3 py-1 text-sm" value={resume.certificationsTitle} onChange={(e) => up('certificationsTitle', e.target.value)} />
+              )}
+              <button
+                type="button"
+                onClick={() => setEditingTitle(s => ({ ...s, certifications: !s.certifications }))}
+                className="p-1 text-gray-600 hover:text-gray-900"
+                title={!editingTitle.certifications ? 'Edit title' : 'Done'}
+              >
+                <LuPencil />
+              </button>
+            </div>
             {resume.certifications.map((c, idx) => (
               <div key={idx} className="border rounded-xl p-3 space-y-2">
                 <div className="grid grid-cols-3 gap-3">
@@ -671,7 +697,21 @@ export default function ResumeBuilder() {
                 Awards is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, awards: true }))}>Unhide</button>
               </div>
             )}
-            <SectionHeader title="Awards" />
+            <div className="flex items-center justify-between">
+              {!editingTitle.awards ? (
+                <h3 className="font-semibold text-gray-800">{resume.awardsTitle}</h3>
+              ) : (
+                <input className="border rounded-xl px-3 py-1 text-sm" value={resume.awardsTitle} onChange={(e) => up('awardsTitle', e.target.value)} />
+              )}
+              <button
+                type="button"
+                onClick={() => setEditingTitle(s => ({ ...s, awards: !s.awards }))}
+                className="p-1 text-gray-600 hover:text-gray-900"
+                title={!editingTitle.awards ? 'Edit title' : 'Done'}
+              >
+                <LuPencil />
+              </button>
+            </div>
             {resume.awards.map((a, idx) => (
               <div key={idx} className="border rounded-xl p-3 space-y-2">
                 <div className="grid grid-cols-3 gap-3">
@@ -697,7 +737,21 @@ export default function ResumeBuilder() {
                 Achievements is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, achievements: true }))}>Unhide</button>
               </div>
             )}
-            <SectionHeader title="Achievements" />
+            <div className="flex items-center justify-between">
+              {!editingTitle.achievements ? (
+                <h3 className="font-semibold text-gray-800">{resume.achievementsTitle}</h3>
+              ) : (
+                <input className="border rounded-xl px-3 py-1 text-sm" value={resume.achievementsTitle} onChange={(e) => up('achievementsTitle', e.target.value)} />
+              )}
+              <button
+                type="button"
+                onClick={() => setEditingTitle(s => ({ ...s, achievements: !s.achievements }))}
+                className="p-1 text-gray-600 hover:text-gray-900"
+                title={!editingTitle.achievements ? 'Edit title' : 'Done'}
+              >
+                <LuPencil />
+              </button>
+            </div>
             <RichEditorWithToolbar
               value={resume.achievements}
               onChange={(v) => up('achievements', v)}
@@ -763,7 +817,7 @@ export default function ResumeBuilder() {
       </section>
 
       {/* Preview */}
-      <section className="col-span-12 md:col-span-4 lg:col-span-5">
+      <section className="col-span-12 md:col-span-3 lg:col-span-4">
         <div ref={previewAreaRef} className="bg-gray-100 rounded-2xl p-4 shadow-inner h-[calc(100vh-180px)] overflow-auto flex items-start justify-center">
           <div className="preview-scale" style={{ width: 794, transform: `scale(${scale})`, transformOrigin: 'top center' }}>
             <div className={`bg-white shadow-xl rounded-xl p-8 print-area`} style={{ width: 794, minHeight: 1123, fontFamily: theme.font === 'serif' ? 'Georgia, Times, serif' : 'Inter, ui-sans-serif, system-ui', '--accent': theme.accent }}>
@@ -776,6 +830,7 @@ export default function ResumeBuilder() {
           </div>
         </div>
       </section>
+      </div>
     </div>
   )
 }
@@ -905,12 +960,12 @@ function BasicTemplate({ data, accent, order, visible }) {
       </Section>
     )),
     achievements: () => data.achievements && (
-      <Section title="Achievements" accent={accent}>
+      <Section title={data.achievementsTitle || 'Achievements'} accent={accent}>
         <SanitizedHtml html={data.achievements} />
       </Section>
     ),
     certifications: () => (certifications?.length > 0 && (
-      <Section title="Certifications" accent={accent}>
+      <Section title={data.certificationsTitle || 'Certifications'} accent={accent}>
         <ul className="list-disc pl-5">
           {certifications.map((c, i) => (
             <li key={i}>{c.name} • {c.org} {c.year && `(${c.year})`}</li>
@@ -919,7 +974,7 @@ function BasicTemplate({ data, accent, order, visible }) {
       </Section>
     )),
     awards: () => (awards?.length > 0 && (
-      <Section title="Awards" accent={accent}>
+      <Section title={data.awardsTitle || 'Awards'} accent={accent}>
         <ul className="list-disc pl-5">
           {awards.map((a, i) => (
             <li key={i}>{a.name} • {a.issuer} {a.year && `(${a.year})`}</li>
@@ -994,19 +1049,19 @@ function ModernTemplate({ data, accent, order, visible }) {
               </Section>
             )}
             {id === 'achievements' && data.achievements && (
-              <Section title="Achievements" accent={accent}>
+              <Section title={data.achievementsTitle || 'Achievements'} accent={accent}>
                 <SanitizedHtml html={data.achievements} />
               </Section>
             )}
             {id === 'certifications' && certifications?.length > 0 && (
-              <Section title="Certifications" accent={accent}>
+              <Section title={data.certificationsTitle || 'Certifications'} accent={accent}>
                 <ul className="list-disc pl-5">
                   {certifications.map((c, i) => (<li key={i}>{c.name} • {c.org} {c.year && `(${c.year})`}</li>))}
                 </ul>
               </Section>
             )}
             {id === 'awards' && awards?.length > 0 && (
-              <Section title="Awards" accent={accent}>
+              <Section title={data.awardsTitle || 'Awards'} accent={accent}>
                 <ul className="list-disc pl-5">
                   {awards.map((a, i) => (<li key={i}>{a.name} • {a.issuer} {a.year && `(${a.year})`}</li>))}
                 </ul>
