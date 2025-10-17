@@ -7,8 +7,8 @@ export default function Navbar() {
     <header className="border-b bg-white">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <NavLink to="/resume" className="font-bold text-3xl flex items-center gap-1 hover:scale-105 transition-transform">
-          <span className="text-black-600">Job</span>
-          <span className="text-green-600">iffy</span>
+          <span className="text-black-550">Job</span>
+          <span className="text-green-550">iffy</span>
         </NavLink>
         <div className="flex items-center gap-3">
           <button
