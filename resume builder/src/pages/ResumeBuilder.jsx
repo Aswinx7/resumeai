@@ -1018,10 +1018,14 @@ function ModernTemplate({ data, accent, order, visible }) {
               <Section title="Experience" accent={accent}>
                 {experience.map((e, i) => (
                   <div key={i} className="mb-3">
-                    <div className="font-semibold">{e.company}</div>
-                    <div className="">{e.role}</div>
-                    <div className="text-xs text-gray-500 mb-1">{dateRange(e.start, e.end)}</div>
-                    <Bullets text={e.details} />
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="font-semibold">{e.company}</div>
+                        <div>{e.role}</div>
+                      </div>
+                      <div className="text-xs text-gray-500 ml-4">{dateRange(e.start, e.end)}</div>
+                    </div>
+                    <SanitizedHtml html={e.details} />
                   </div>
                 ))}
               </Section>
@@ -1030,9 +1034,14 @@ function ModernTemplate({ data, accent, order, visible }) {
               <Section title="Education" accent={accent}>
                 {education.map((ed, i) => (
                   <div key={i} className="mb-3">
-                    <div className="font-medium">{ed.degree} • {ed.school}</div>
-                    <div className="text-xs text-gray-500 mb-1">{dateRange(ed.start, ed.end)}</div>
-                    <p className="text-sm">{ed.details}</p>
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="font-semibold">{ed.school}</div>
+                        <div>{ed.degree}</div>
+                      </div>
+                      <div className="text-xs text-gray-500 ml-4">{dateRange(ed.start, ed.end)}</div>
+                    </div>
+                    <SanitizedHtml html={ed.details} small />
                   </div>
                 ))}
               </Section>
@@ -1041,9 +1050,11 @@ function ModernTemplate({ data, accent, order, visible }) {
               <Section title="Projects" accent={accent}>
                 {projects.map((p, i) => (
                   <div key={i} className="mb-3">
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-gray-500 mb-1">{dateRange(p.start, p.end)}</div>
-                    <p className="text-sm">{p.details}</p>
+                    <div className="flex items-baseline justify-between">
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-gray-500 ml-4">{dateRange(p.start, p.end)}</div>
+                    </div>
+                    <SanitizedHtml html={p.details} small />
                   </div>
                 ))}
               </Section>
