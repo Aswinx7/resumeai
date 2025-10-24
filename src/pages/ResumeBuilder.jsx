@@ -36,7 +36,8 @@ const emptyResume = {
   awardsTitle: 'Awards',
   achievementsTitle: 'Achievements',
   achievements: '',
-  hobbies: ''
+  hobbies: '',
+  customSections: []
 }
 
 function dateRange(start, end) {
@@ -455,7 +456,7 @@ export default function ResumeBuilder() {
   const [editingTitle, setEditingTitle] = useState({ certifications: false, awards: false, achievements: false })
   const previewAreaRef = useRef(null)
   const [sectionsOrder, setSectionsOrder] = useState([
-    'summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements'
+    'summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements', 'customs'
   ])
   const [visible, setVisible] = useState({
     summary: true,
@@ -467,7 +468,11 @@ export default function ResumeBuilder() {
     awards: true,
     achievements: true,
     //hobbies: true,
+    customs: true,
   })
+
+  const currentCustomId = (tab || '').startsWith('custom:') ? (tab.split(':')[1] || null) : null
+  const currentCustom = currentCustomId ? (resume.customSections || []).find(cs => cs.id === currentCustomId) : null
 
   const tabs = useMemo(() => ([
     { id: 'personal', label: 'Personal Details', icon: LuUser },
@@ -481,6 +486,38 @@ export default function ResumeBuilder() {
     { id: 'customize', label: 'Customize', icon: LuSlidersHorizontal },
     { id: 'templates', label: 'Templates', icon: LuLayoutTemplate },
   ]), [])
+
+  function addCustomSection() {
+    const id = Math.random().toString(36).slice(2, 8)
+    const newSection = { id, title: 'Custom', rows: [{ box1: '', box2: '', start: '', end: '', details: '' }] }
+    setResume(r => ({ ...r, customSections: [...(r.customSections || []), newSection] }))
+    setTab(`custom:${id}`)
+  }
+
+  function upCustomTitle(id, title) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, title } : cs)
+    }))
+  }
+  function upCustomRow(id, idx, key, value) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, rows: cs.rows.map((row, i) => i === idx ? { ...row, [key]: value } : row) } : cs)
+    }))
+  }
+  function addCustomRow(id) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, rows: [...cs.rows, { box1: '', box2: '', start: '', end: '', details: '' }] } : cs)
+    }))
+  }
+  function delCustomRow(id, idx) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, rows: cs.rows.filter((_, i) => i !== idx) } : cs)
+    }))
+  }
 
   const up = (path, value) => setResume((r) => ({ ...r, [path]: value }))
   const upDeep = (section, idx, key, value) => setResume((r) => ({ ...r, [section]: r[section].map((it, i) => i === idx ? { ...it, [key]: value } : it) }))
@@ -541,6 +578,25 @@ export default function ResumeBuilder() {
                 </div>
               )
             })}
+            <div className="border-t my-2" />
+            <button onClick={addCustomSection} className="w-full flex items-center justify-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer bg-blue-50 text-blue-700 hover:bg-blue-100">
+              + Add Section
+            </button>
+            {(resume.customSections || []).map(cs => {
+              const active = tab === `custom:${cs.id}`
+              return (
+                <div
+                  key={cs.id}
+                  onClick={() => setTab(`custom:${cs.id}`)}
+                  className={`w-full flex items-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <LuLayoutTemplate className="shrink-0" />
+                    <span className="whitespace-nowrap truncate" title={cs.title}>{cs.title}</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </aside>
 
@@ -553,6 +609,42 @@ export default function ResumeBuilder() {
                 <option value="basic">Basic</option>
                 <option value="modern">Modern</option>
               </select>
+            </div>
+          )}
+
+          {currentCustom && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.customs && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Custom sections are currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, customs: true }))}>Unhide</button>
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="text-sm text-gray-600">Section Title</label>
+                <input className="border rounded-xl px-3 py-2 w-full" value={currentCustom.title} onChange={(e) => upCustomTitle(currentCustom.id, e.target.value)} />
+              </div>
+              {currentCustom.rows.map((c, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="Box 1" value={c.box1} onChange={(e) => upCustomRow(currentCustom.id, idx, 'box1', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Box 2" value={c.box2} onChange={(e) => upCustomRow(currentCustom.id, idx, 'box2', e.target.value)} />
+                    <DateInput placeholder="Start (e.g., Jan 2022)" value={c.start || ''} onChange={(v) => upCustomRow(currentCustom.id, idx, 'start', v)} />
+                    <DateInput placeholder="End (e.g., Present)" value={c.end || ''} onChange={(v) => upCustomRow(currentCustom.id, idx, 'end', v)} />
+                  </div>
+                  <SectionHeader title="Description" />
+                  <RichEditorWithToolbar
+                    value={c.details}
+                    onChange={(v) => upCustomRow(currentCustom.id, idx, 'details', v)}
+                    placeholder="Description"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => addCustomRow(currentCustom.id)} className="text-sm text-blue-600">Add Row</button>
+                    {currentCustom.rows.length > 1 && (
+                      <button onClick={() => delCustomRow(currentCustom.id, idx)} className="text-sm text-red-600">Remove Row</button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -903,7 +995,28 @@ function Bullets({ text }) {
   )
 }
 
+function buildProfileLink(value, hostHint) {
+  if (!value) return null
+  const cleanUser = (s) => (s || '').replace(/^[@/]/, '')
+  const base = hostHint || ''
+  try {
+    const url = new URL(value.startsWith('http') ? value : `https://${base}${cleanUser(value)}`)
+    const path = (url.pathname || '').replace(/\/+$/, '')
+    const user = cleanUser(path.split('/').filter(Boolean).pop() || '')
+    return { href: url.toString(), text: user || url.host }
+  } catch {
+    const v = String(value)
+    const mLinked = v.match(/linkedin\.com\/(?:in|pub)\/([^/?#]+)/i)
+    const mGit = v.match(/github\.com\/([^/?#]+)/i)
+    const user = cleanUser((mLinked && mLinked[1]) || (mGit && mGit[1]) || v)
+    const href = v.startsWith('http') ? v : `https://${base}${cleanUser(v)}`
+    return { href, text: user }
+  }
+}
+
 function Header({ personal, accent }) {
+  const li = personal.linkedin ? buildProfileLink(personal.linkedin, 'linkedin.com/in/') : null
+  const gh = personal.github ? buildProfileLink(personal.github, 'github.com/') : null
   return (
     <div className="mb-4 pb-2" style={{ borderBottom: `1px solid ${accent}` }}>
       <h1 className="text-2xl font-bold text-center">{personal.fullName || 'Your Name'}</h1>
@@ -921,11 +1034,11 @@ function Header({ personal, accent }) {
         {personal.website && (
           <span className="inline-flex items-center gap-1"><LuGlobe style={{ color: accent }} />{formatLink(personal.website)}</span>
         )}
-        {personal.linkedin && (
-          <span className="inline-flex items-center gap-1"><LuLinkedin style={{ color: accent }} />{formatLink(personal.linkedin, 'linkedin.com/in/')}</span>
+        {li && (
+          <span className="inline-flex items-center gap-1"><LuLinkedin style={{ color: accent }} /><a href={li.href} className="text-blue-600" target="_blank" rel="noreferrer">{li.text}</a></span>
         )}
-        {personal.github && (
-          <span className="inline-flex items-center gap-1"><LuGithub style={{ color: accent }} />{formatLink(personal.github, 'github.com/')}</span>
+        {gh && (
+          <span className="inline-flex items-center gap-1"><LuGithub style={{ color: accent }} /><a href={gh.href} className="text-blue-600" target="_blank" rel="noreferrer">{gh.text}</a></span>
         )}
       </div>
     </div>
@@ -943,7 +1056,7 @@ function formatLink(value, hostHint) {
 }
 
 function BasicTemplate({ data, accent, order, visible }) {
-  const { personal, summary, skills, experience, education, projects, certifications, awards, hobbies } = data
+  const { personal, summary, skills, experience, education, projects, certifications, awards, hobbies, customSections } = data
   const renderers = {
     summary: () => summary && (<Section title="Summary" accent={accent}><p>{summary}</p></Section>),
     skills: () => skills && (<Section title="Skills" accent={accent}><p>{skills}</p></Section>),
@@ -1023,6 +1136,26 @@ function BasicTemplate({ data, accent, order, visible }) {
       </Section>
     )),
     hobbies: () => hobbies && (<Section title="Hobbies" accent={accent}><p>{hobbies}</p></Section>),
+    customs: () => ((customSections || []).length > 0 && (
+      <div>
+        {(customSections || []).map((sec, si) => (
+          <Section key={si} title={sec.title || 'Custom'} accent={accent}>
+            {sec.rows.map((c, i) => (
+              <div key={i} className="mb-3">
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <div className="font-semibold">{c.box1}</div>
+                    <div>{c.box2}</div>
+                  </div>
+                  <div className="text-xs text-gray-500 ml-4">{dateRange(c.start, c.end)}</div>
+                </div>
+                <SanitizedHtml html={c.details} small />
+              </div>
+            ))}
+          </Section>
+        ))}
+      </div>
+    )),
   }
   return (
     <div>
@@ -1126,6 +1259,26 @@ function ModernTemplate({ data, accent, order, visible }) {
                   ))}
                 </ul>
               </Section>
+            )}
+            {id === 'customs' && (data.customSections || []).length > 0 && (
+              <div>
+                {(data.customSections || []).map((sec, si) => (
+                  <Section key={si} title={sec.title || 'Custom'} accent={accent}>
+                    {sec.rows.map((c, i) => (
+                      <div key={i} className="mb-3">
+                        <div className="flex items-baseline justify-between">
+                          <div>
+                            <div className="font-semibold">{c.box1}</div>
+                            <div>{c.box2}</div>
+                          </div>
+                          <div className="text-xs text-gray-500 ml-4">{dateRange(c.start, c.end)}</div>
+                        </div>
+                        <SanitizedHtml html={c.details} small />
+                      </div>
+                    ))}
+                  </Section>
+                ))}
+              </div>
             )}
             {id === 'hobbies' && hobbies && (
               <Section title="Hobbies" accent={accent}><p>{hobbies}</p></Section>
