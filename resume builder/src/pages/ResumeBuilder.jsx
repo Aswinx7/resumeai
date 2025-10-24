@@ -14,7 +14,8 @@ import {
   LuUnderline,
   LuList,
   LuLink,
-  LuPencil
+  LuPencil,
+  LuCalendar
 } from 'react-icons/lu'
 import { LuMail, LuPhone, LuMapPin, LuLinkedin, LuGithub, LuGlobe } from 'react-icons/lu'
 import { DndContext, closestCenter } from '@dnd-kit/core'
@@ -29,13 +30,14 @@ const emptyResume = {
   experience: [{ company: '', role: '', start: '', end: '', details: '' }],
   education: [{ school: '', degree: '', start: '', end: '', details: '' }],
   projects: [{ name: '', link: '', start: '', end: '', details: '' }],
-  certifications: [{ name: '', org: '', year: '' }],
+  certifications: [{ name: '', org: '', start: '', end: '' }],
   awards: [{ name: '', issuer: '', year: '' }],
   certificationsTitle: 'Certifications',
   awardsTitle: 'Awards',
   achievementsTitle: 'Achievements',
   achievements: '',
-  hobbies: ''
+  hobbies: '',
+  customSections: []
 }
 
 function dateRange(start, end) {
@@ -237,6 +239,48 @@ function SectionHeader({ title, action, onAction, loading }) {
   )
 }
 
+function DateInput({ value, onChange, placeholder }) {
+  const monthRef = useRef(null)
+  function openPicker() {
+    if (monthRef.current?.showPicker) monthRef.current.showPicker()
+    else monthRef.current?.focus()
+  }
+  function onMonthChange(e) {
+    const v = e.target.value // YYYY-MM
+    if (!v) return
+    const [y, m] = v.split('-')
+    const d = new Date(Number(y), Number(m) - 1, 1)
+    const formatted = d.toLocaleString('en-US', { month: 'short', year: 'numeric' })
+    onChange(formatted)
+  }
+  return (
+    <div className="relative">
+      <input
+        className="border rounded-xl px-3 py-2 w-full"
+        placeholder={placeholder}
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900"
+        title="Pick month"
+      >
+        <LuCalendar />
+      </button>
+      <input
+        ref={monthRef}
+        type="month"
+        className="absolute opacity-0 w-0 h-0 pointer-events-none"
+        onChange={onMonthChange}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  )
+}
+
 function InlineFormatted({ text }) {
   if (!text) return null
   const parts = []
@@ -412,7 +456,7 @@ export default function ResumeBuilder() {
   const [editingTitle, setEditingTitle] = useState({ certifications: false, awards: false, achievements: false })
   const previewAreaRef = useRef(null)
   const [sectionsOrder, setSectionsOrder] = useState([
-    'summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements', 'hobbies'
+    'summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements', 'customs'
   ])
   const [visible, setVisible] = useState({
     summary: true,
@@ -423,8 +467,12 @@ export default function ResumeBuilder() {
     certifications: true,
     awards: true,
     achievements: true,
-    hobbies: true,
+    //hobbies: true,
+    customs: true,
   })
+
+  const currentCustomId = (tab || '').startsWith('custom:') ? (tab.split(':')[1] || null) : null
+  const currentCustom = currentCustomId ? (resume.customSections || []).find(cs => cs.id === currentCustomId) : null
 
   const tabs = useMemo(() => ([
     { id: 'personal', label: 'Personal Details', icon: LuUser },
@@ -438,6 +486,38 @@ export default function ResumeBuilder() {
     { id: 'customize', label: 'Customize', icon: LuSlidersHorizontal },
     { id: 'templates', label: 'Templates', icon: LuLayoutTemplate },
   ]), [])
+
+  function addCustomSection() {
+    const id = Math.random().toString(36).slice(2, 8)
+    const newSection = { id, title: 'Custom', rows: [{ box1: '', box2: '', start: '', end: '', details: '' }] }
+    setResume(r => ({ ...r, customSections: [...(r.customSections || []), newSection] }))
+    setTab(`custom:${id}`)
+  }
+
+  function upCustomTitle(id, title) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, title } : cs)
+    }))
+  }
+  function upCustomRow(id, idx, key, value) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, rows: cs.rows.map((row, i) => i === idx ? { ...row, [key]: value } : row) } : cs)
+    }))
+  }
+  function addCustomRow(id) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, rows: [...cs.rows, { box1: '', box2: '', start: '', end: '', details: '' }] } : cs)
+    }))
+  }
+  function delCustomRow(id, idx) {
+    setResume(r => ({
+      ...r,
+      customSections: (r.customSections || []).map(cs => cs.id === id ? { ...cs, rows: cs.rows.filter((_, i) => i !== idx) } : cs)
+    }))
+  }
 
   const up = (path, value) => setResume((r) => ({ ...r, [path]: value }))
   const upDeep = (section, idx, key, value) => setResume((r) => ({ ...r, [section]: r[section].map((it, i) => i === idx ? { ...it, [key]: value } : it) }))
@@ -463,7 +543,7 @@ export default function ResumeBuilder() {
       const availW = Math.max(0, el.clientWidth - padding * 2)
       const availH = Math.max(0, el.clientHeight - padding * 2)
       const s = Math.min(availW / A4.w, availH / A4.h)
-      setScale(Number.isFinite(s) && s > 0 ? Math.min(s, 1) : 1)
+      setScale(Number.isFinite(s) && s > 0 ? Math.min(s * 1.25, 1) : 1)
     }
     computeScale()
     const ro = new ResizeObserver(computeScale)
@@ -478,358 +558,405 @@ export default function ResumeBuilder() {
 
   return (
     <div className="global-zoom">
-      <div className="grid grid-cols-12 gap-6">
-      {/* Sidebar */}
-      <aside className="col-span-12 md:col-span-4 lg:col-span-3">
-        <div className="bg-white rounded-2xl shadow p-2 sticky top-4">
-          {tabs.map(t => {
-            const Icon = t.icon
-            const active = tab === t.id
-            const hideable = ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'awards', 'achievements', 'hobbies'].includes(t.id)
-            return (
-              <div
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`w-full flex items-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
-              >
-                <div className="flex items-center gap-3">
-                  {Icon ? <Icon className="shrink-0" /> : <span className="inline-block w-4 h-4 rounded bg-gray-300" />}
-                  <span className="whitespace-nowrap">{t.label}</span>
+      <div className="grid grid-cols-12 gap-4">
+        {/* Sidebar */}
+        <aside className="col-span-10 md:col-span-4 lg:col-span-2">
+          <div className="bg-white rounded-2xl shadow p-2 sticky top-4">
+            {tabs.map(t => {
+              const Icon = t.icon
+              const active = tab === t.id
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`w-full flex items-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {Icon ? <Icon className="shrink-0" /> : <span className="inline-block w-4 h-4 rounded bg-gray-300" />}
+                    <span className="whitespace-nowrap">{t.label}</span>
+                  </div>
                 </div>
-                <div className="ml-auto w-6 shrink-0 flex items-center justify-center">
-                  {hideable && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setVisible(v => ({ ...v, [t.id]: !v[t.id] })) }}
-                      className={`${visible[t.id] ? 'text-gray-500 hover:text-gray-800' : 'text-red-500 hover:text-red-700'}`}
-                      title={visible[t.id] ? 'Hide this section in preview' : 'Unhide this section in preview'}
-                    >
-                      {visible[t.id] ? <LuEye /> : <LuEyeOff />}
-                    </button>
-                  )}
+              )
+            })}
+            <div className="border-t my-2" />
+            <button onClick={addCustomSection} className="w-full flex items-center justify-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer bg-blue-50 text-blue-700 hover:bg-blue-100">
+              + Add Section
+            </button>
+            {(resume.customSections || []).map(cs => {
+              const active = tab === `custom:${cs.id}`
+              return (
+                <div
+                  key={cs.id}
+                  onClick={() => setTab(`custom:${cs.id}`)}
+                  className={`w-full flex items-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <LuLayoutTemplate className="shrink-0" />
+                    <span className="whitespace-nowrap truncate" title={cs.title}>{cs.title}</span>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      </aside>
-
-      {/* Editor */}
-      <section className="col-span-12 md:col-span-5 lg:col-span-5 space-y-6">
-        {tab === 'templates' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            <SectionHeader title="Templates" />
-            <select value={template} onChange={(e) => setTemplate(e.target.value)} className="w-full border rounded-md px-3 py-2">
-              <option value="basic">Basic</option>
-              <option value="modern">Modern</option>
-            </select>
+              )
+            })}
           </div>
-        )}
+        </aside>
 
-        {tab === 'personal' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            <SectionHeader title="Personal Details" />
-            <div className="grid grid-cols-2 gap-3">
-              <input className="border rounded-xl px-3 py-2" placeholder="Full Name" value={resume.personal.fullName} onChange={(e) => up('personal', { ...resume.personal, fullName: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2" placeholder="Title (e.g., Frontend Developer)" value={resume.personal.title} onChange={(e) => up('personal', { ...resume.personal, title: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2" placeholder="Email" value={resume.personal.email} onChange={(e) => up('personal', { ...resume.personal, email: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2" placeholder="Phone" value={resume.personal.phone} onChange={(e) => up('personal', { ...resume.personal, phone: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2 col-span-2" placeholder="Location" value={resume.personal.location} onChange={(e) => up('personal', { ...resume.personal, location: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2 col-span-2" placeholder="Website (https://...)" value={resume.personal.website} onChange={(e) => up('personal', { ...resume.personal, website: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2" placeholder="LinkedIn (username or URL)" value={resume.personal.linkedin} onChange={(e) => up('personal', { ...resume.personal, linkedin: e.target.value })} />
-              <input className="border rounded-xl px-3 py-2" placeholder="GitHub (username or URL)" value={resume.personal.github} onChange={(e) => up('personal', { ...resume.personal, github: e.target.value })} />
+        {/* Editor */}
+        <section className="col-span-12 md:col-span-5 lg:col-span-5 space-y-6">
+          {tab === 'templates' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              <SectionHeader title="Templates" />
+              <select value={template} onChange={(e) => setTemplate(e.target.value)} className="w-full border rounded-md px-3 py-2">
+                <option value="basic">Basic</option>
+                <option value="modern">Modern</option>
+              </select>
             </div>
-          </div>
-        )}
+          )}
 
-        {tab === 'skills' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.skills && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Skills is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, skills: true }))}>Unhide</button>
-              </div>
-            )}
-            <SectionHeader title="Skills (comma separated)" />
-            <input className="w-full border rounded-xl px-3 py-2" value={resume.skills} onChange={(e) => up('skills', e.target.value)} placeholder="React, Tailwind, Firebase, REST" />
-          </div>
-        )}
-
-        {tab === 'experience' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.experience && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Experience is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, experience: true }))}>Unhide</button>
-              </div>
-            )}
-            <SectionHeader title="Work Experience" />
-            {resume.experience.map((exp, idx) => (
-              <div key={idx} className="border rounded-xl p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <input className="border rounded-xl px-3 py-2" placeholder="Company" value={exp.company} onChange={(e) => upDeep('experience', idx, 'company', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Role" value={exp.role} onChange={(e) => upDeep('experience', idx, 'role', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Start (e.g., Jan 2022)" value={exp.start || ''} onChange={(e) => upDeep('experience', idx, 'start', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="End (e.g., Present)" value={exp.end || ''} onChange={(e) => upDeep('experience', idx, 'end', e.target.value)} />
+          {currentCustom && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.customs && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Custom sections are currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, customs: true }))}>Unhide</button>
                 </div>
-                <SectionHeader title="Details" />
-                <RichEditorWithToolbar
-                  value={exp.details}
-                  onChange={(v) => upDeep('experience', idx, 'details', v)}
-                  placeholder="Details"
-                />
-                <div className="flex gap-2">
-                  <button onClick={() => addRow('experience', { company: '', role: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
-                  {resume.experience.length > 1 && (
-                    <button onClick={() => delRow('experience', idx)} className="text-sm text-red-600">Remove</button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'education' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.education && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Education is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, education: true }))}>Unhide</button>
-              </div>
-            )}
-            <SectionHeader title="Education" />
-            {resume.education.map((ed, idx) => (
-              <div key={idx} className="border rounded-xl p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <input className="border rounded-xl px-3 py-2" placeholder="School" value={ed.school} onChange={(e) => upDeep('education', idx, 'school', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Degree" value={ed.degree} onChange={(e) => upDeep('education', idx, 'degree', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Start (e.g., 2020)" value={ed.start || ''} onChange={(e) => upDeep('education', idx, 'start', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="End (e.g., 2024)" value={ed.end || ''} onChange={(e) => upDeep('education', idx, 'end', e.target.value)} />
-                </div>
-                <RichEditorWithToolbar
-                  value={ed.details}
-                  onChange={(v) => upDeep('education', idx, 'details', v)}
-                  placeholder="Details"
-                />
-                <div className="flex gap-2">
-                  <button onClick={() => addRow('education', { school: '', degree: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
-                  {resume.education.length > 1 && (
-                    <button onClick={() => delRow('education', idx)} className="text-sm text-red-600">Remove</button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'projects' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.projects && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Projects is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, projects: true }))}>Unhide</button>
-              </div>
-            )}
-            <SectionHeader title="Projects" />
-            {resume.projects.map((p, idx) => (
-              <div key={idx} className="border rounded-xl p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <input className="border rounded-xl px-3 py-2" placeholder="Project Name" value={p.name} onChange={(e) => upDeep('projects', idx, 'name', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Link" value={p.link} onChange={(e) => upDeep('projects', idx, 'link', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Start (e.g., Feb 2023)" value={p.start || ''} onChange={(e) => upDeep('projects', idx, 'start', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="End (e.g., Jun 2023)" value={p.end || ''} onChange={(e) => upDeep('projects', idx, 'end', e.target.value)} />
-                </div>
-                <RichEditorWithToolbar
-                  value={p.details}
-                  onChange={(v) => upDeep('projects', idx, 'details', v)}
-                  placeholder="Details"
-                />
-                <div className="flex gap-2">
-                  <button onClick={() => addRow('projects', { name: '', link: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
-                  {resume.projects.length > 1 && (
-                    <button onClick={() => delRow('projects', idx)} className="text-sm text-red-600">Remove</button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'certifications' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.certifications && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Certifications is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, certifications: true }))}>Unhide</button>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              {!editingTitle.certifications ? (
-                <h3 className="font-semibold text-gray-800">{resume.certificationsTitle}</h3>
-              ) : (
-                <input className="border rounded-xl px-3 py-1 text-sm" value={resume.certificationsTitle} onChange={(e) => up('certificationsTitle', e.target.value)} />
               )}
-              <button
-                type="button"
-                onClick={() => setEditingTitle(s => ({ ...s, certifications: !s.certifications }))}
-                className="p-1 text-gray-600 hover:text-gray-900"
-                title={!editingTitle.certifications ? 'Edit title' : 'Done'}
-              >
-                <LuPencil />
-              </button>
+              <div className="space-y-2">
+                <label className="text-sm text-gray-600">Section Title</label>
+                <input className="border rounded-xl px-3 py-2 w-full" value={currentCustom.title} onChange={(e) => upCustomTitle(currentCustom.id, e.target.value)} />
+              </div>
+              {currentCustom.rows.map((c, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="Box 1" value={c.box1} onChange={(e) => upCustomRow(currentCustom.id, idx, 'box1', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Box 2" value={c.box2} onChange={(e) => upCustomRow(currentCustom.id, idx, 'box2', e.target.value)} />
+                    <DateInput placeholder="Start (e.g., Jan 2022)" value={c.start || ''} onChange={(v) => upCustomRow(currentCustom.id, idx, 'start', v)} />
+                    <DateInput placeholder="End (e.g., Present)" value={c.end || ''} onChange={(v) => upCustomRow(currentCustom.id, idx, 'end', v)} />
+                  </div>
+                  <SectionHeader title="Description" />
+                  <RichEditorWithToolbar
+                    value={c.details}
+                    onChange={(v) => upCustomRow(currentCustom.id, idx, 'details', v)}
+                    placeholder="Description"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => addCustomRow(currentCustom.id)} className="text-sm text-blue-600">Add Row</button>
+                    {currentCustom.rows.length > 1 && (
+                      <button onClick={() => delCustomRow(currentCustom.id, idx)} className="text-sm text-red-600">Remove Row</button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            {resume.certifications.map((c, idx) => (
-              <div key={idx} className="border rounded-xl p-3 space-y-2">
-                <div className="grid grid-cols-3 gap-3">
-                  <input className="border rounded-xl px-3 py-2" placeholder="Name" value={c.name} onChange={(e) => upDeep('certifications', idx, 'name', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Organization" value={c.org} onChange={(e) => upDeep('certifications', idx, 'org', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Year" value={c.year} onChange={(e) => upDeep('certifications', idx, 'year', e.target.value)} />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => addRow('certifications', { name: '', org: '', year: '' })} className="text-sm text-blue-600">Add</button>
-                  {resume.certifications.length > 1 && (
-                    <button onClick={() => delRow('certifications', idx)} className="text-sm text-red-600">Remove</button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          )}
 
-        {tab === 'awards' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.awards && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Awards is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, awards: true }))}>Unhide</button>
+          {tab === 'personal' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              <SectionHeader title="Personal Details" />
+              <div className="grid grid-cols-2 gap-3">
+                <input className="border rounded-xl px-3 py-2" placeholder="Full Name" value={resume.personal.fullName} onChange={(e) => up('personal', { ...resume.personal, fullName: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2" placeholder="Title (e.g., Frontend Developer)" value={resume.personal.title} onChange={(e) => up('personal', { ...resume.personal, title: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2" placeholder="Email" value={resume.personal.email} onChange={(e) => up('personal', { ...resume.personal, email: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2" placeholder="Phone" value={resume.personal.phone} onChange={(e) => up('personal', { ...resume.personal, phone: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2 col-span-2" placeholder="Location" value={resume.personal.location} onChange={(e) => up('personal', { ...resume.personal, location: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2 col-span-2" placeholder="Website (https://...)" value={resume.personal.website} onChange={(e) => up('personal', { ...resume.personal, website: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2" placeholder="LinkedIn (username or URL)" value={resume.personal.linkedin} onChange={(e) => up('personal', { ...resume.personal, linkedin: e.target.value })} />
+                <input className="border rounded-xl px-3 py-2" placeholder="GitHub (username or URL)" value={resume.personal.github} onChange={(e) => up('personal', { ...resume.personal, github: e.target.value })} />
               </div>
-            )}
-            <div className="flex items-center justify-between">
-              {!editingTitle.awards ? (
-                <h3 className="font-semibold text-gray-800">{resume.awardsTitle}</h3>
-              ) : (
-                <input className="border rounded-xl px-3 py-1 text-sm" value={resume.awardsTitle} onChange={(e) => up('awardsTitle', e.target.value)} />
+            </div>
+          )}
+
+          {tab === 'skills' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.skills && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Skills is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, skills: true }))}>Unhide</button>
+                </div>
               )}
-              <button
-                type="button"
-                onClick={() => setEditingTitle(s => ({ ...s, awards: !s.awards }))}
-                className="p-1 text-gray-600 hover:text-gray-900"
-                title={!editingTitle.awards ? 'Edit title' : 'Done'}
-              >
-                <LuPencil />
-              </button>
+              <SectionHeader title="Skills (comma separated)" />
+              <input className="w-full border rounded-xl px-3 py-2" value={resume.skills} onChange={(e) => up('skills', e.target.value)} placeholder="React, Tailwind, Firebase, REST" />
             </div>
-            {resume.awards.map((a, idx) => (
-              <div key={idx} className="border rounded-xl p-3 space-y-2">
-                <div className="grid grid-cols-3 gap-3">
-                  <input className="border rounded-xl px-3 py-2" placeholder="Name" value={a.name} onChange={(e) => upDeep('awards', idx, 'name', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Issuer" value={a.issuer} onChange={(e) => upDeep('awards', idx, 'issuer', e.target.value)} />
-                  <input className="border rounded-xl px-3 py-2" placeholder="Year" value={a.year} onChange={(e) => upDeep('awards', idx, 'year', e.target.value)} />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => addRow('awards', { name: '', issuer: '', year: '' })} className="text-sm text-blue-600">Add</button>
-                  {resume.awards.length > 1 && (
-                    <button onClick={() => delRow('awards', idx)} className="text-sm text-red-600">Remove</button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          )}
 
-        {tab === 'achievements' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            {!visible.achievements && (
-              <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
-                Achievements is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, achievements: true }))}>Unhide</button>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              {!editingTitle.achievements ? (
-                <h3 className="font-semibold text-gray-800">{resume.achievementsTitle}</h3>
-              ) : (
-                <input className="border rounded-xl px-3 py-1 text-sm" value={resume.achievementsTitle} onChange={(e) => up('achievementsTitle', e.target.value)} />
+          {tab === 'experience' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.experience && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Experience is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, experience: true }))}>Unhide</button>
+                </div>
               )}
-              <button
-                type="button"
-                onClick={() => setEditingTitle(s => ({ ...s, achievements: !s.achievements }))}
-                className="p-1 text-gray-600 hover:text-gray-900"
-                title={!editingTitle.achievements ? 'Edit title' : 'Done'}
-              >
-                <LuPencil />
-              </button>
+              <SectionHeader title="Work Experience" />
+              {resume.experience.map((exp, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="Company" value={exp.company} onChange={(e) => upDeep('experience', idx, 'company', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Role" value={exp.role} onChange={(e) => upDeep('experience', idx, 'role', e.target.value)} />
+                    <DateInput placeholder="Start (e.g., Jan 2022)" value={exp.start || ''} onChange={(v) => upDeep('experience', idx, 'start', v)} />
+                    <DateInput placeholder="End (e.g., Present)" value={exp.end || ''} onChange={(v) => upDeep('experience', idx, 'end', v)} />
+                  </div>
+                  <SectionHeader title="Details" />
+                  <RichEditorWithToolbar
+                    value={exp.details}
+                    onChange={(v) => upDeep('experience', idx, 'details', v)}
+                    placeholder="Details"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => addRow('experience', { company: '', role: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
+                    {resume.experience.length > 1 && (
+                      <button onClick={() => delRow('experience', idx)} className="text-sm text-red-600">Remove</button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <RichEditorWithToolbar
-              value={resume.achievements}
-              onChange={(v) => up('achievements', v)}
-              placeholder="Describe your notable achievements"
-            />
-          </div>
-        )}
+          )}
 
-        {tab === 'customize' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            <SectionHeader title="Customize" />
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm text-gray-700">Font
-                <select value={theme.font} onChange={(e) => setTheme(t => ({ ...t, font: e.target.value }))} className="mt-1 w-full border rounded-xl px-3 py-2">
-                  <option value="sans">Sans Serif</option>
-                  <option value="serif">Serif</option>
-                </select>
-              </label>
-              <label className="text-sm text-gray-700">Accent Color
-                <input type="color" value={theme.accent} onChange={(e) => setTheme(t => ({ ...t, accent: e.target.value }))} className="mt-1 h-10 w-full border rounded-xl p-1" />
-              </label>
+          {tab === 'education' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.education && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Education is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, education: true }))}>Unhide</button>
+                </div>
+              )}
+              <SectionHeader title="Education" />
+              {resume.education.map((ed, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="School" value={ed.school} onChange={(e) => upDeep('education', idx, 'school', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Degree" value={ed.degree} onChange={(e) => upDeep('education', idx, 'degree', e.target.value)} />
+                    <DateInput placeholder="Start (e.g., 2020)" value={ed.start || ''} onChange={(v) => upDeep('education', idx, 'start', v)} />
+                    <DateInput placeholder="End (e.g., 2024)" value={ed.end || ''} onChange={(v) => upDeep('education', idx, 'end', v)} />
+                  </div>
+                  <RichEditorWithToolbar
+                    value={ed.details}
+                    onChange={(v) => upDeep('education', idx, 'details', v)}
+                    placeholder="Details"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => addRow('education', { school: '', degree: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
+                    {resume.education.length > 1 && (
+                      <button onClick={() => delRow('education', idx)} className="text-sm text-red-600">Remove</button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="mt-4">
-              <h4 className="text-sm font-semibold text-gray-800 mb-2">Section Order & Visibility</h4>
-              <DndContext collisionDetection={closestCenter} onDragEnd={({ active, over }) => {
-                if (!over || active.id === over.id) return
-                const oldIndex = sectionsOrder.indexOf(active.id)
-                const newIndex = sectionsOrder.indexOf(over.id)
-                setSectionsOrder((items) => arrayMove(items, oldIndex, newIndex))
-              }}>
-                <SortableContext items={sectionsOrder} strategy={verticalListSortingStrategy}>
-                  <ul className="space-y-2">
-                    {sectionsOrder.map((id) => (
-                      <SortableItem key={id} id={id}>
-                        <div className="flex items-center justify-between gap-2 bg-gray-50 border rounded-xl px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <LuGripVertical className="text-gray-400" />
-                            <span className="capitalize text-sm">{id}</span>
+          )}
+
+          {tab === 'projects' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.projects && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Projects is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, projects: true }))}>Unhide</button>
+                </div>
+              )}
+              <SectionHeader title="Projects" />
+              {resume.projects.map((p, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="Project Name" value={p.name} onChange={(e) => upDeep('projects', idx, 'name', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Link" value={p.link} onChange={(e) => upDeep('projects', idx, 'link', e.target.value)} />
+                    <DateInput placeholder="Start (e.g., Feb 2023)" value={p.start || ''} onChange={(v) => upDeep('projects', idx, 'start', v)} />
+                    <DateInput placeholder="End (e.g., Jun 2023)" value={p.end || ''} onChange={(v) => upDeep('projects', idx, 'end', v)} />
+                  </div>
+                  <RichEditorWithToolbar
+                    value={p.details}
+                    onChange={(v) => upDeep('projects', idx, 'details', v)}
+                    placeholder="Details"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => addRow('projects', { name: '', link: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
+                    {resume.projects.length > 1 && (
+                      <button onClick={() => delRow('projects', idx)} className="text-sm text-red-600">Remove</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'certifications' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.certifications && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Certifications is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, certifications: true }))}>Unhide</button>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                {!editingTitle.certifications ? (
+                  <h3 className="font-semibold text-gray-800">{resume.certificationsTitle}</h3>
+                ) : (
+                  <input className="border rounded-xl px-3 py-1 text-sm" value={resume.certificationsTitle} onChange={(e) => up('certificationsTitle', e.target.value)} />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(s => ({ ...s, certifications: !s.certifications }))}
+                  className="p-1 text-gray-600 hover:text-gray-900"
+                  title={!editingTitle.certifications ? 'Edit title' : 'Done'}
+                >
+                  <LuPencil />
+                </button>
+              </div>
+              {resume.certifications.map((c, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="Name" value={c.name} onChange={(e) => upDeep('certifications', idx, 'name', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Organization" value={c.org} onChange={(e) => upDeep('certifications', idx, 'org', e.target.value)} />
+                    <DateInput placeholder="Start (e.g., Jan 2022)" value={c.start || ''} onChange={(v) => upDeep('certifications', idx, 'start', v)} />
+                    <DateInput placeholder="End (e.g., Present)" value={c.end || ''} onChange={(v) => upDeep('certifications', idx, 'end', v)} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => addRow('certifications', { name: '', org: '', start: '', end: '' })} className="text-sm text-blue-600">Add</button>
+                    {resume.certifications.length > 1 && (
+                      <button onClick={() => delRow('certifications', idx)} className="text-sm text-red-600">Remove</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'awards' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.awards && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Awards is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, awards: true }))}>Unhide</button>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                {!editingTitle.awards ? (
+                  <h3 className="font-semibold text-gray-800">{resume.awardsTitle}</h3>
+                ) : (
+                  <input className="border rounded-xl px-3 py-1 text-sm" value={resume.awardsTitle} onChange={(e) => up('awardsTitle', e.target.value)} />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(s => ({ ...s, awards: !s.awards }))}
+                  className="p-1 text-gray-600 hover:text-gray-900"
+                  title={!editingTitle.awards ? 'Edit title' : 'Done'}
+                >
+                  <LuPencil />
+                </button>
+              </div>
+              {resume.awards.map((a, idx) => (
+                <div key={idx} className="border rounded-xl p-3 space-y-2">
+                  <div className="grid grid-cols-3 gap-3">
+                    <input className="border rounded-xl px-3 py-2" placeholder="Name" value={a.name} onChange={(e) => upDeep('awards', idx, 'name', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Issuer" value={a.issuer} onChange={(e) => upDeep('awards', idx, 'issuer', e.target.value)} />
+                    <input className="border rounded-xl px-3 py-2" placeholder="Year" value={a.year} onChange={(e) => upDeep('awards', idx, 'year', e.target.value)} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => addRow('awards', { name: '', issuer: '', year: '' })} className="text-sm text-blue-600">Add</button>
+                    {resume.awards.length > 1 && (
+                      <button onClick={() => delRow('awards', idx)} className="text-sm text-red-600">Remove</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'achievements' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              {!visible.achievements && (
+                <div className="mb-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm px-3 py-2">
+                  Achievements is currently hidden in the preview. <button className="underline" onClick={() => setVisible(v => ({ ...v, achievements: true }))}>Unhide</button>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                {!editingTitle.achievements ? (
+                  <h3 className="font-semibold text-gray-800">{resume.achievementsTitle}</h3>
+                ) : (
+                  <input className="border rounded-xl px-3 py-1 text-sm" value={resume.achievementsTitle} onChange={(e) => up('achievementsTitle', e.target.value)} />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(s => ({ ...s, achievements: !s.achievements }))}
+                  className="p-1 text-gray-600 hover:text-gray-900"
+                  title={!editingTitle.achievements ? 'Edit title' : 'Done'}
+                >
+                  <LuPencil />
+                </button>
+              </div>
+              <RichEditorWithToolbar
+                value={resume.achievements}
+                onChange={(v) => up('achievements', v)}
+                placeholder="Describe your notable achievements"
+              />
+            </div>
+          )}
+
+          {tab === 'customize' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              <SectionHeader title="Customize" />
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm text-gray-700">Font
+                  <select value={theme.font} onChange={(e) => setTheme(t => ({ ...t, font: e.target.value }))} className="mt-1 w-full border rounded-xl px-3 py-2">
+                    <option value="sans">Sans Serif</option>
+                    <option value="serif">Serif</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">Accent Color
+                  <input type="color" value={theme.accent} onChange={(e) => setTheme(t => ({ ...t, accent: e.target.value }))} className="mt-1 h-10 w-full border rounded-xl p-1" />
+                </label>
+              </div>
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-gray-800 mb-2">Section Order & Visibility</h4>
+                <DndContext collisionDetection={closestCenter} onDragEnd={({ active, over }) => {
+                  if (!over || active.id === over.id) return
+                  const oldIndex = sectionsOrder.indexOf(active.id)
+                  const newIndex = sectionsOrder.indexOf(over.id)
+                  setSectionsOrder((items) => arrayMove(items, oldIndex, newIndex))
+                }}>
+                  <SortableContext items={sectionsOrder} strategy={verticalListSortingStrategy}>
+                    <ul className="space-y-2">
+                      {sectionsOrder.map((id) => (
+                        <SortableItem key={id} id={id}>
+                          <div className="flex items-center justify-between gap-2 bg-gray-50 border rounded-xl px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <LuGripVertical className="text-gray-400" />
+                              <span className="capitalize text-sm">{id}</span>
+                            </div>
+                            <button
+                              onClick={() => setVisible(v => ({ ...v, [id]: !v[id] }))}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => { e.stopPropagation(); e.preventDefault() }}
+                              onTouchStart={(e) => e.stopPropagation()}
+                              className="text-gray-600 hover:text-gray-900"
+                              title={visible[id] ? 'Hide' : 'Unhide'}
+                            >
+                              {visible[id] ? <LuEye /> : <LuEyeOff />}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => setVisible(v => ({ ...v, [id]: !v[id] }))}
-                            className="text-gray-600 hover:text-gray-900"
-                            title={visible[id] ? 'Hide' : 'Unhide'}
-                          >
-                            {visible[id] ? <LuEye /> : <LuEyeOff />}
-                          </button>
-                        </div>
-                      </SortableItem>
-                    ))}
-                  </ul>
-                </SortableContext>
-              </DndContext>
+                        </SortableItem>
+                      ))}
+                    </ul>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
+          )}
+
+          {tab === 'personal' && (
+            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+              <SectionHeader title="Professional Summary" action="Generate with AI" onAction={genSummary} loading={loadingKey === 'summary'} />
+              <textarea rows={4} className="w-full border rounded-xl px-3 py-2" value={resume.summary} onChange={(e) => up('summary', e.target.value)} />
+            </div>
+          )}
+        </section>
+
+        {/* Preview */}
+        <section className="col-span-12 md:col-span-3 lg:col-span-5">
+          <div ref={previewAreaRef} className="bg-gray-100 rounded-2xl p-4 shadow-inner h-[calc(98vh-180px)] overflow-auto flex items-start justify-center">
+            <div className="preview-scale" style={{ width: 950, transform: `scale(${scale})`, transformOrigin: 'top center' }}>
+              <div className={`bg-white shadow-xl rounded-xl p-8 print-area`} style={{ width: 800, minHeight: 1123, fontFamily: theme.font === 'serif' ? 'Georgia, Times, serif' : 'Inter, ui-sans-serif, system-ui', '--accent': theme.accent }}>
+                {template === 'basic' ? (
+                  <BasicTemplate data={resume} accent={theme.accent} order={sectionsOrder} visible={visible} />
+                ) : (
+                  <ModernTemplate data={resume} accent={theme.accent} order={sectionsOrder} visible={visible} />
+                )}
+              </div>
             </div>
           </div>
-        )}
-
-        {tab === 'personal' && (
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            <SectionHeader title="Professional Summary" action="Generate with AI" onAction={genSummary} loading={loadingKey === 'summary'} />
-            <textarea rows={4} className="w-full border rounded-xl px-3 py-2" value={resume.summary} onChange={(e) => up('summary', e.target.value)} />
-          </div>
-        )}
-      </section>
-
-      {/* Preview */}
-      <section className="col-span-12 md:col-span-3 lg:col-span-4">
-        <div ref={previewAreaRef} className="bg-gray-100 rounded-2xl p-4 shadow-inner h-[calc(100vh-180px)] overflow-auto flex items-start justify-center">
-          <div className="preview-scale" style={{ width: 794, transform: `scale(${scale})`, transformOrigin: 'top center' }}>
-            <div className={`bg-white shadow-xl rounded-xl p-8 print-area`} style={{ width: 794, minHeight: 1123, fontFamily: theme.font === 'serif' ? 'Georgia, Times, serif' : 'Inter, ui-sans-serif, system-ui', '--accent': theme.accent }}>
-              {template === 'basic' ? (
-                <BasicTemplate data={resume} accent={theme.accent} order={sectionsOrder} visible={visible} />
-              ) : (
-                <ModernTemplate data={resume} accent={theme.accent} order={sectionsOrder} visible={visible} />
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
       </div>
     </div>
   )
@@ -868,7 +995,28 @@ function Bullets({ text }) {
   )
 }
 
+function buildProfileLink(value, hostHint) {
+  if (!value) return null
+  const cleanUser = (s) => (s || '').replace(/^[@/]/, '')
+  const base = hostHint || ''
+  try {
+    const url = new URL(value.startsWith('http') ? value : `https://${base}${cleanUser(value)}`)
+    const path = (url.pathname || '').replace(/\/+$/, '')
+    const user = cleanUser(path.split('/').filter(Boolean).pop() || '')
+    return { href: url.toString(), text: user || url.host }
+  } catch {
+    const v = String(value)
+    const mLinked = v.match(/linkedin\.com\/(?:in|pub)\/([^/?#]+)/i)
+    const mGit = v.match(/github\.com\/([^/?#]+)/i)
+    const user = cleanUser((mLinked && mLinked[1]) || (mGit && mGit[1]) || v)
+    const href = v.startsWith('http') ? v : `https://${base}${cleanUser(v)}`
+    return { href, text: user }
+  }
+}
+
 function Header({ personal, accent }) {
+  const li = personal.linkedin ? buildProfileLink(personal.linkedin, 'linkedin.com/in/') : null
+  const gh = personal.github ? buildProfileLink(personal.github, 'github.com/') : null
   return (
     <div className="mb-4 pb-2" style={{ borderBottom: `1px solid ${accent}` }}>
       <h1 className="text-2xl font-bold text-center">{personal.fullName || 'Your Name'}</h1>
@@ -886,11 +1034,11 @@ function Header({ personal, accent }) {
         {personal.website && (
           <span className="inline-flex items-center gap-1"><LuGlobe style={{ color: accent }} />{formatLink(personal.website)}</span>
         )}
-        {personal.linkedin && (
-          <span className="inline-flex items-center gap-1"><LuLinkedin style={{ color: accent }} />{formatLink(personal.linkedin, 'linkedin.com/in/')}</span>
+        {li && (
+          <span className="inline-flex items-center gap-1"><LuLinkedin style={{ color: accent }} /><a href={li.href} className="text-blue-600" target="_blank" rel="noreferrer">{li.text}</a></span>
         )}
-        {personal.github && (
-          <span className="inline-flex items-center gap-1"><LuGithub style={{ color: accent }} />{formatLink(personal.github, 'github.com/')}</span>
+        {gh && (
+          <span className="inline-flex items-center gap-1"><LuGithub style={{ color: accent }} /><a href={gh.href} className="text-blue-600" target="_blank" rel="noreferrer">{gh.text}</a></span>
         )}
       </div>
     </div>
@@ -908,7 +1056,7 @@ function formatLink(value, hostHint) {
 }
 
 function BasicTemplate({ data, accent, order, visible }) {
-  const { personal, summary, skills, experience, education, projects, certifications, awards, hobbies } = data
+  const { personal, summary, skills, experience, education, projects, certifications, awards, hobbies, customSections } = data
   const renderers = {
     summary: () => summary && (<Section title="Summary" accent={accent}><p>{summary}</p></Section>),
     skills: () => skills && (<Section title="Skills" accent={accent}><p>{skills}</p></Section>),
@@ -968,7 +1116,12 @@ function BasicTemplate({ data, accent, order, visible }) {
       <Section title={data.certificationsTitle || 'Certifications'} accent={accent}>
         <ul className="list-disc pl-5">
           {certifications.map((c, i) => (
-            <li key={i}>{c.name} • {c.org} {c.year && `(${c.year})`}</li>
+            <li key={i} className="mb-1">
+              <div className="flex items-baseline justify-between">
+                <div className="font-medium">{c.name}{c.org ? `, ${c.org}` : ''}</div>
+                <div className="text-xs text-gray-500 ml-4">{dateRange(c.start, c.end)}</div>
+              </div>
+            </li>
           ))}
         </ul>
       </Section>
@@ -977,12 +1130,32 @@ function BasicTemplate({ data, accent, order, visible }) {
       <Section title={data.awardsTitle || 'Awards'} accent={accent}>
         <ul className="list-disc pl-5">
           {awards.map((a, i) => (
-            <li key={i}>{a.name} • {a.issuer} {a.year && `(${a.year})`}</li>
+            <li key={i}>{a.name}{a.issuer ? `, ${a.issuer}` : ''} {a.year && `(${a.year})`}</li>
           ))}
         </ul>
       </Section>
     )),
     hobbies: () => hobbies && (<Section title="Hobbies" accent={accent}><p>{hobbies}</p></Section>),
+    customs: () => ((customSections || []).length > 0 && (
+      <div>
+        {(customSections || []).map((sec, si) => (
+          <Section key={si} title={sec.title || 'Custom'} accent={accent}>
+            {sec.rows.map((c, i) => (
+              <div key={i} className="mb-3">
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <div className="font-semibold">{c.box1}</div>
+                    <div>{c.box2}</div>
+                  </div>
+                  <div className="text-xs text-gray-500 ml-4">{dateRange(c.start, c.end)}</div>
+                </div>
+                <SanitizedHtml html={c.details} small />
+              </div>
+            ))}
+          </Section>
+        ))}
+      </div>
+    )),
   }
   return (
     <div>
@@ -1067,16 +1240,45 @@ function ModernTemplate({ data, accent, order, visible }) {
             {id === 'certifications' && certifications?.length > 0 && (
               <Section title={data.certificationsTitle || 'Certifications'} accent={accent}>
                 <ul className="list-disc pl-5">
-                  {certifications.map((c, i) => (<li key={i}>{c.name} • {c.org} {c.year && `(${c.year})`}</li>))}
+                  {certifications.map((c, i) => (
+                    <li key={i} className="mb-1">
+                      <div className="flex items-baseline justify-between">
+                        <div className="font-medium">{c.name}{c.org ? `, ${c.org}` : ''}</div>
+                        <div className="text-xs text-gray-500 ml-4">{dateRange(c.start, c.end)}</div>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               </Section>
             )}
             {id === 'awards' && awards?.length > 0 && (
               <Section title={data.awardsTitle || 'Awards'} accent={accent}>
                 <ul className="list-disc pl-5">
-                  {awards.map((a, i) => (<li key={i}>{a.name} • {a.issuer} {a.year && `(${a.year})`}</li>))}
+                  {awards.map((a, i) => (
+                    <li key={i}>{a.name}{a.issuer ? `, ${a.issuer}` : ''} {a.year && `(${a.year})`}</li>
+                  ))}
                 </ul>
               </Section>
+            )}
+            {id === 'customs' && (data.customSections || []).length > 0 && (
+              <div>
+                {(data.customSections || []).map((sec, si) => (
+                  <Section key={si} title={sec.title || 'Custom'} accent={accent}>
+                    {sec.rows.map((c, i) => (
+                      <div key={i} className="mb-3">
+                        <div className="flex items-baseline justify-between">
+                          <div>
+                            <div className="font-semibold">{c.box1}</div>
+                            <div>{c.box2}</div>
+                          </div>
+                          <div className="text-xs text-gray-500 ml-4">{dateRange(c.start, c.end)}</div>
+                        </div>
+                        <SanitizedHtml html={c.details} small />
+                      </div>
+                    ))}
+                  </Section>
+                ))}
+              </div>
             )}
             {id === 'hobbies' && hobbies && (
               <Section title="Hobbies" accent={accent}><p>{hobbies}</p></Section>
