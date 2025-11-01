@@ -1,29 +1,42 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-
-
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-let model
-
-function getModel() {
-  if (!apiKey) throw new Error('Missing VITE_GEMINI_API_KEY')
-  if (!model) {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+async function generateSectionContent(prompt) {
+  if (!API_KEY) {
+    throw new Error('Missing VITE_GEMINI_API_KEY environment variable');
   }
-  return model
+
+  try {
+    // Using Gemini 1.5 Pro model
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || 'Failed to generate content');
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } catch (error) {
+    console.error('Error in generateSectionContent:', error);
+    throw error;
+  }
 }
 
-export async function generateSectionContent(prompt) {
-  const m = getModel()
-  const res = await m.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
-  const text = res.response.text()
-  return text
+async function generateCoverLetter({ role, company, highlights, resumeText, tone = 'professional' }) {
+  const prompt = `Write a ${tone} cover letter for the role "${role}" at "${company}". Use the candidate highlights: ${highlights}. Base it on this resume:\n${resumeText}. Keep it concise (200-300 words).`;
+  return generateSectionContent(prompt);
 }
 
-export async function generateCoverLetter({ role, company, highlights, resumeText, tone = 'professional' }) {
-  const m = getModel()
-  const prompt = `Write a ${tone} cover letter for the role "${role}" at "${company}". Use the candidate highlights: ${highlights}. Base it on this resume:\n${resumeText}. Keep it concise (200-300 words).`
-  const res = await m.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
-  return res.response.text()
-}
+export { generateSectionContent, generateCoverLetter };

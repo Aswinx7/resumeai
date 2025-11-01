@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { generateSectionContent } from '../lib/ai'
+import AIResumeAssistant from '../components/aiassist'
 import {
   LuUser,
   LuBookOpen,
@@ -113,7 +114,7 @@ function SanitizedHtml({ html, small }) {
   )
 }
 
-function RichEditorWithToolbar({ value, onChange, placeholder }) {
+function RichEditorWithToolbar({ value, onChange, placeholder, section }) {
   const ref = useRef(null)
   useEffect(() => {
     const el = ref.current
@@ -221,6 +222,15 @@ function RichEditorWithToolbar({ value, onChange, placeholder }) {
         onPaste={onPaste}
         suppressContentEditableWarning
         style={{ whiteSpace: 'pre-wrap' }}
+      />
+      <AIResumeAssistant 
+        section={section || 'this section'}
+        onAction={(action, result) => {
+          // Update the content with the AI result
+          if (result) {
+            onChange(result);
+          }
+        }}
       />
     </div>
   )
@@ -519,6 +529,19 @@ export default function ResumeBuilder() {
     }))
   }
 
+  function deleteCustomSection(id) {
+    if (window.confirm('Are you sure you want to delete this section? This cannot be undone.')) {
+      setResume(r => ({
+        ...r,
+        customSections: (r.customSections || []).filter(cs => cs.id !== id)
+      }))
+      // If the deleted section was active, switch to personal tab
+      if (tab === `custom:${id}`) {
+        setTab('personal')
+      }
+    }
+  }
+
   const up = (path, value) => setResume((r) => ({ ...r, [path]: value }))
   const upDeep = (section, idx, key, value) => setResume((r) => ({ ...r, [section]: r[section].map((it, i) => i === idx ? { ...it, [key]: value } : it) }))
   const addRow = (section, row) => setResume((r) => ({ ...r, [section]: [...r[section], row] }))
@@ -587,13 +610,33 @@ export default function ResumeBuilder() {
               return (
                 <div
                   key={cs.id}
-                  onClick={() => setTab(`custom:${cs.id}`)}
-                  className={`w-full flex items-center px-3 py-2 rounded-xl text-sm mb-1 cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                  className="group relative w-full flex items-center justify-between mb-1"
                 >
-                  <div className="flex items-center gap-3">
-                    <LuLayoutTemplate className="shrink-0" />
-                    <span className="whitespace-nowrap truncate" title={cs.title}>{cs.title}</span>
+                  <div
+                    onClick={() => setTab(`custom:${cs.id}`)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm cursor-pointer ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <LuFolderGit2 className="w-4 h-4" />
+                      <span className="truncate">{cs.title || 'Custom'}</span>
+                    </div>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteCustomSection(cs.id);
+                    }}
+                    className="absolute right-2 p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete section"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
                 </div>
               )
             })}
@@ -636,6 +679,7 @@ export default function ResumeBuilder() {
                     value={c.details}
                     onChange={(v) => upCustomRow(currentCustom.id, idx, 'details', v)}
                     placeholder="Description"
+                    section="custom section"
                   />
                   <div className="flex gap-2">
                     <button onClick={() => addCustomRow(currentCustom.id)} className="text-sm text-blue-600">Add Row</button>
@@ -697,6 +741,7 @@ export default function ResumeBuilder() {
                     value={exp.details}
                     onChange={(v) => upDeep('experience', idx, 'details', v)}
                     placeholder="Details"
+                    section="work experience"
                   />
                   <div className="flex gap-2">
                     <button onClick={() => addRow('experience', { company: '', role: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
@@ -729,6 +774,7 @@ export default function ResumeBuilder() {
                     value={ed.details}
                     onChange={(v) => upDeep('education', idx, 'details', v)}
                     placeholder="Details"
+                    section="education"
                   />
                   <div className="flex gap-2">
                     <button onClick={() => addRow('education', { school: '', degree: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
@@ -761,6 +807,7 @@ export default function ResumeBuilder() {
                     value={p.details}
                     onChange={(v) => upDeep('projects', idx, 'details', v)}
                     placeholder="Details"
+                    section="project"
                   />
                   <div className="flex gap-2">
                     <button onClick={() => addRow('projects', { name: '', link: '', start: '', end: '', details: '' })} className="text-sm text-blue-600">Add</button>
@@ -880,6 +927,7 @@ export default function ResumeBuilder() {
                 value={resume.achievements}
                 onChange={(v) => up('achievements', v)}
                 placeholder="Describe your notable achievements"
+                section="achievements"
               />
             </div>
           )}
